@@ -7,3 +7,13 @@ psycopg2-binary
 python-dotenv
 google-generativeai
 PyGithub
+fastapi
+uvicorn
+celery
+redis
+sqlalchemy
+psycopg2-binary
+python-dotenv
+google-generativeai
+PyGithub
+anthropic
