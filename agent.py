@@ -1,38 +1,39 @@
 import os
 import json
 import google.generativeai as genai
+import anthropic
 
-# Configure the SDK with the key from Render's environment variables
+# Setup clients
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 def analyze_event_with_gemini(source: str, payload: dict) -> str:
-    """
-    Uses Gemini to read the webhook payload and decide the next action.
-    """
     try:
-        # Using flash for fast routing decisions
-        model = genai.GenerativeModel('gemini-2.5-flash') 
-        
+        model = genai.GenerativeModel('gemini-1.5-flash') # Using 1.5 for maximum stability
         system_instruction = (
-            "You are the Cognitive Routing Engine for an autonomous agent. "
-            "Analyze the incoming webhook payload. "
-            "1. Determine the event type (e.g., push, pull_request, issue) and summarize what happened. "
-            "2. Decide which sub-agent should handle it: "
-            "   - 'Claude' for complex code generation, refactoring, or reviewing PRs. "
-            "   - 'Manus' for external operations, browser tasks, or deployment. "
-            "   - 'Gemini' for general reasoning, text processing, or if no action is needed. "
-            "Respond in strict JSON format using this schema: "
-            "{'event_summary': '...', 'assigned_agent': '...', 'reasoning': '...'}"
+            "You are a router. Analyze the GitHub payload. "
+            "Return ONLY JSON with these keys: 'event_summary', 'assigned_agent', 'reasoning'. "
+            "assigned_agent must be either 'Claude' (for code/bugs) or 'Gemini' (for greetings/stars)."
         )
-        
-        # Truncate payload to avoid overloading the context window with massive commits
-        prompt = f"Source: {source}\n\nPayload:\n{json.dumps(payload)[:5000]}" 
+        prompt = f"Source: {source}\nPayload: {json.dumps(payload)[:2000]}"
         
         response = model.generate_content(
             f"{system_instruction}\n\n{prompt}",
             generation_config={"response_mime_type": "application/json"}
         )
-        
         return response.text
     except Exception as e:
-        return json.dumps({"error": str(e), "assigned_agent": "none"})
+        print(f"Gemini Routing Error: {e}")
+        return json.dumps({"assigned_agent": "Gemini", "reasoning": "Error in routing, defaulting."})
+
+def call_claude_for_coding(task_description: str):
+    try:
+        message = anthropic_client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": f"You are a Senior Engineer. Provide a technical solution for: {task_description}"}]
+        )
+        return message.content[0].text
+    except Exception as e:
+        print(f"Claude API Error: {e}")
+        return "I encountered an error while consulting Claude for this technical task."
