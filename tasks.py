@@ -1,7 +1,7 @@
 import os
 from celery import Celery
+from agent import analyze_event_with_gemini
 
-# Render provides the Redis URL in the environment variables
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 celery_app = Celery(
@@ -12,11 +12,14 @@ celery_app = Celery(
 
 @celery_app.task
 def process_agent_task(task_id: str, source: str, payload: dict):
-    # This is where the task is handed off to the Cognitive Engine (Gemini/Claude/Manus)
     print(f"Executing task {task_id} from {source}")
-    print(f"Payload: {payload}")
     
-    # TODO: Connect to DB, update status to 'processing'
-    # TODO: Route to LLM
-    # TODO: Update status to 'completed'
-    return {"status": "success", "task_id": task_id}
+    # 1. Cognitive Routing
+    decision_json = analyze_event_with_gemini(source, payload)
+    
+    # Log the output so we can see Gemini's decision in the Render dashboard
+    print(f"Gemini Routing Decision: {decision_json}")
+    
+    # 2. (Future) Execute the tool or API call for the assigned_agent
+    
+    return {"status": "success", "task_id": task_id, "decision": decision_json}
